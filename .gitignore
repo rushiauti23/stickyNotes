@@ -1,0 +1,16 @@
+# Build output
+.gradle/
+build/
+.kotlin/
+/StickyNotes/captures/
+
+# Local machine / IDE
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Signing: never commit these
+keystore.properties
+*.jks
+*.keystore
