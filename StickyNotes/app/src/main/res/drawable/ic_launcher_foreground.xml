@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- flat paper note with a folded corner, two ink lines -->
+    <path
+        android:fillColor="#F4F1EA"
+        android:pathData="M34,32 H74 V64 L62,76 H34 Z" />
+    <path
+        android:fillColor="#CFC8B8"
+        android:pathData="M74,64 L62,64 L62,76 Z" />
+    <path
+        android:pathData="M42,45 H66 M42,54 H58"
+        android:strokeWidth="3"
+        android:strokeColor="#1C1B19"
+        android:strokeLineCap="round" />
+</vector>

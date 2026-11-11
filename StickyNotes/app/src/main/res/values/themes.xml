@@ -1,0 +1,4 @@
+<resources>
+    <color name="ic_launcher_background">#1C1B19</color>
+    <style name="Theme.StickyNotes" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
