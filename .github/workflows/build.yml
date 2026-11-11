@@ -1,0 +1,70 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+# Least privilege: this workflow only needs to read the code.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: StickyNotes
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Actions are pinned to full commit SHAs (tags can be moved); Dependabot keeps them updated.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Build debug APK
+        run: gradle :app:assembleDebug
+
+      - name: Build signed release bundle (only if signing secrets are set)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "No signing secrets set, skipping release bundle."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+          {
+            echo "storeFile=release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > keystore.properties
+          gradle :app:bundleRelease
+          rm -f release.jks keystore.properties
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sticky-notes-debug-apk
+          path: StickyNotes/app/build/outputs/apk/debug/*.apk
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sticky-notes-release-aab
+          path: StickyNotes/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: ignore
