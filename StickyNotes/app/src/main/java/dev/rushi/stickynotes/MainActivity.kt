@@ -1,5 +1,6 @@
 package dev.rushi.stickynotes
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.setContent
@@ -18,6 +19,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import dev.rushi.stickynotes.security.AppLock
 import dev.rushi.stickynotes.security.Authenticator
 import dev.rushi.stickynotes.ui.editor.NoteEditorScreen
@@ -36,11 +39,15 @@ class MainActivity : FragmentActivity() {
     private val appLock by lazy { (application as StickyNotesApp).appLock }
     private lateinit var authenticator: Authenticator
 
+    /** Note to open, e.g. from a reminder notification. Consumed once the notes UI shows it. */
+    private val openNoteRequest = MutableStateFlow<Long?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         authenticator = Authenticator(this)
         applySecureFlag(appLock.enabled.value)
+        if (savedInstanceState == null) handleOpenNoteIntent(intent)
 
         setContent {
             StickyNotesTheme {
@@ -62,12 +69,29 @@ class MainActivity : FragmentActivity() {
                                 authenticator.authenticate(title = "Unlock Sticky Notes") { appLock.unlock() }
                             })
                         } else {
-                            AppNavHost()
+                            AppNavHost(
+                                openNoteRequest = openNoteRequest,
+                                onOpenNoteHandled = { openNoteRequest.value = null },
+                            )
                         }
                     }
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleOpenNoteIntent(intent)
+    }
+
+    // The activity is exported (launcher), so treat the extra as untrusted: it can only ever
+    // select one of the user's own notes by id, and the app lock still applies on top.
+    private fun handleOpenNoteIntent(intent: Intent?) {
+        val id = intent?.getLongExtra(EXTRA_OPEN_NOTE_ID, -1L) ?: -1L
+        intent?.removeExtra(EXTRA_OPEN_NOTE_ID)
+        if (id > 0L) openNoteRequest.value = id
     }
 
     override fun onStart() {
@@ -87,10 +111,14 @@ class MainActivity : FragmentActivity() {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
+
+    companion object {
+        const val EXTRA_OPEN_NOTE_ID = "open_note_id"
+    }
 }
 
 @Composable
-private fun AppNavHost() {
+private fun AppNavHost(openNoteRequest: StateFlow<Long?>, onOpenNoteHandled: () -> Unit) {
     val nav = rememberNavController()
     NavHost(navController = nav, startDestination = "notes") {
         composable("notes") {
@@ -109,5 +137,13 @@ private fun AppNavHost() {
         composable("settings") {
             SettingsScreen(onBack = { nav.navigateUp() })
         }
+    }
+
+    // After NavHost so the graph is set before we navigate.
+    val requestedNote by openNoteRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(requestedNote) {
+        val id = requestedNote ?: return@LaunchedEffect
+        nav.navigate("note/$id") { launchSingleTop = true }
+        onOpenNoteHandled()
     }
 }

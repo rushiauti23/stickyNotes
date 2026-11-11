@@ -16,6 +16,12 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE id = :id")
     suspend fun getById(id: Long): Note?
 
+    @Query("SELECT * FROM notes WHERE reminderAt IS NOT NULL")
+    suspend fun withReminders(): List<Note>
+
+    @Query("DELETE FROM notes WHERE expiresAt IS NOT NULL AND expiresAt <= :now")
+    suspend fun deleteExpired(now: Long): Int
+
     /** REPLACE so an undone delete can re-insert the note with its original id. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(note: Note): Long

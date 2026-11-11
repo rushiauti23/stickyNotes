@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items as rowItems
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
@@ -28,11 +30,17 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.HourglassEmpty
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -58,15 +66,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.rushi.stickynotes.data.Checklist
 import dev.rushi.stickynotes.data.Note
+import dev.rushi.stickynotes.ui.common.reminderLabel
+import dev.rushi.stickynotes.ui.common.vanishLabel
 import dev.rushi.stickynotes.ui.editor.NoteEditorViewModel
 import dev.rushi.stickynotes.ui.theme.noteBorderColor
 import dev.rushi.stickynotes.ui.theme.noteColor
@@ -83,7 +99,11 @@ fun NoteListScreen(
     val notes by vm.notes.collectAsStateWithLifecycle()
     val query by vm.query.collectAsStateWithLifecycle()
     val pendingUndo by vm.pendingUndo.collectAsStateWithLifecycle()
+    val tags by vm.tags.collectAsStateWithLifecycle()
+    val selectedTag by vm.selectedTag.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { vm.purgeExpired() }
 
     LaunchedEffect(pendingUndo) {
         if (pendingUndo == null) return@LaunchedEffect
@@ -121,6 +141,10 @@ fun NoteListScreen(
                     onQueryChange = vm::onQueryChange,
                     modifier = Modifier.padding(end = 12.dp),
                 )
+                if (tags.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    TagRow(tags = tags, selected = selectedTag, onSelect = vm::onTagSelected)
+                }
             }
         },
         floatingActionButton = {
@@ -139,7 +163,10 @@ fun NoteListScreen(
         val list = notes
         when {
             list == null -> Unit
-            list.isEmpty() -> EmptyState(searching = query.isNotBlank(), modifier = Modifier.padding(padding))
+            list.isEmpty() -> EmptyState(
+                searching = query.isNotBlank() || selectedTag != null,
+                modifier = Modifier.padding(padding),
+            )
             else -> {
                 val pinned = list.filter { it.pinned }
                 val others = list.filterNot { it.pinned }
@@ -220,6 +247,30 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, modifier
 }
 
 @Composable
+private fun TagRow(tags: List<String>, selected: String?, onSelect: (String) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        rowItems(tags, key = { it }) { tag ->
+            FilterChip(
+                selected = tag == selected,
+                onClick = { onSelect(tag) },
+                label = { Text("#$tag") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = tag == selected,
+                    borderColor = MaterialTheme.colorScheme.outlineVariant,
+                    selectedBorderColor = Color.Transparent,
+                ),
+            )
+        }
+    }
+}
+
+@Composable
 private fun SectionHeader(text: String) {
     Text(
         text = text.uppercase(),
@@ -284,7 +335,9 @@ private fun NoteCard(
                     }
                     if (note.content.isNotBlank()) Spacer(Modifier.height(6.dp))
                 }
-                if (note.content.isNotBlank()) {
+                if (note.isChecklist) {
+                    ChecklistPreview(note.content, ink)
+                } else if (note.content.isNotBlank()) {
                     Text(
                         text = note.content,
                         style = MaterialTheme.typography.bodyMedium,
@@ -294,6 +347,10 @@ private fun NoteCard(
                     )
                 }
                 Spacer(Modifier.height(12.dp))
+                val context = LocalContext.current
+                val meta = ink.copy(alpha = 0.7f) // ≥4.5:1 on every tint
+                note.reminderAt?.let { MetaLine(Icons.Outlined.Notifications, reminderLabel(context, it), meta) }
+                note.expiresAt?.let { MetaLine(Icons.Outlined.HourglassEmpty, vanishLabel(it), meta) }
                 Text(
                     text = DateUtils.getRelativeTimeSpanString(
                         note.updatedAt,
@@ -301,7 +358,7 @@ private fun NoteCard(
                         DateUtils.MINUTE_IN_MILLIS,
                     ).toString(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = ink.copy(alpha = 0.7f), // ≥4.5:1 on every tint
+                    color = meta,
                 )
             }
         }
@@ -322,6 +379,52 @@ private fun NoteCard(
 }
 
 @Composable
+private fun ChecklistPreview(content: String, ink: Color) {
+    val items = remember(content) { Checklist.parse(content) }
+    val done = items.count { it.checked }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        items.take(PREVIEW_ITEMS).forEach { item ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    if (item.checked) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank,
+                    contentDescription = if (item.checked) "Done" else "To do",
+                    tint = ink.copy(alpha = if (item.checked) 0.5f else 0.8f),
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    item.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ink.copy(alpha = if (item.checked) 0.55f else 0.85f),
+                    textDecoration = if (item.checked) TextDecoration.LineThrough else null,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (items.isNotEmpty()) {
+            val more = items.size - PREVIEW_ITEMS
+            Text(
+                (if (more > 0) "+$more more · " else "") + "$done/${items.size} done",
+                style = MaterialTheme.typography.labelSmall,
+                color = ink.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+private const val PREVIEW_ITEMS = 6
+
+@Composable
+private fun MetaLine(icon: ImageVector, text: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(13.dp))
+        Spacer(Modifier.width(5.dp))
+        Text(text, style = MaterialTheme.typography.labelSmall, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
 private fun EmptyState(searching: Boolean, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
@@ -336,7 +439,7 @@ private fun EmptyState(searching: Boolean, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = if (searching) "Try another word." else "Tap + to write one.",
+            text = if (searching) "Try another word or tag." else "Tap + to write one.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

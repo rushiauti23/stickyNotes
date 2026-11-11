@@ -5,6 +5,16 @@ A minimal, private, offline notes app: Kotlin + Jetpack Compose (Material 3) + R
 ## Features
 - Quiet "paper and ink" design: flat cards, hairline borders, no shadows, neutral palette
 - 8 muted paper tints (light + dark), new notes start Plain
+- **Checklists**: turn any note into tickable items ("Next" on the keyboard adds the next item);
+  the board shows progress like "3/5 done"
+- **Reminders**: in 1 hour, this evening, tomorrow morning, next week, or any date & time.
+  Tapping the notification opens the note. Survive reboots. With the app lock on, the
+  notification never shows note text
+- **Vanishing notes**: a note can delete itself after 24 hours, 3 days or 7 days. Handy for
+  parking spots, one-time codes, today's to-dos
+- **#tags**: write `#work` or `#ideas` anywhere in a note and filter chips appear on the board
+- **Timestamp**: one tap inserts the current date & time at the cursor
+- Word count and "edited" time under every note
 - Pin notes to the top, search title + body
 - Auto-save on back and when the app goes to the background; emptied notes are discarded
 - Long-press a note → Pin / Delete, with **Undo** snackbar
