@@ -24,8 +24,9 @@ android {
         applicationId = "dev.rushi.stickynotes"
         minSdk = 28
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.4.0"
+        // The release workflow passes these from the GitHub release tag (v1.4.1 -> 1.4.1 / 10401).
+        versionCode = (findProperty("appVersionCode") as String?)?.toInt() ?: 10500
+        versionName = (findProperty("appVersionName") as String?) ?: "1.5.0"
     }
 
     signingConfigs {

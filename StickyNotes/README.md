@@ -25,7 +25,8 @@ A minimal, private, offline notes app: Kotlin + Jetpack Compose (Material 3) + R
 - **Archive**: hide notes you want to keep but not see every day (long-press → Archive, or ⋮ → Archive)
 - **Trash**: deleted notes stay recoverable for 30 days; Undo on every delete/archive
 - **Backup**: Settings → Export / Import a `.json` file (export asks for your fingerprint if the app lock is on)
-- **Home-screen widget**: pinned notes (or recent ones) with a + button; shows nothing while the app lock is on
+- **Sticky note widget**: put any note or to-do list on the home screen in its own colour; tick items right on the widget, ↺ unticks all for a fresh day. Add as many as you like, one per note.
+- **Pinned notes widget**: pinned notes (or recent ones) with a + button; hidden while the app lock is on unless you allow it in Settings
 - **Share to Sticky Notes**: share text from any app and it becomes a new note
 - Pin notes to the top, search title + body
 - Auto-save on back and when the app goes to the background; emptied notes are discarded

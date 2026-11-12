@@ -53,4 +53,24 @@ class ChecklistTest {
         assertEquals(ids.size, ids.toSet().size)
         assertFalse(ids.contains(0L))
     }
+
+    @Test
+    fun toggleItemTicksAndUnticksByIndex() {
+        val content = "[ ] milk\n\n[x] bread\n[ ] eggs"
+        assertEquals("[ ] milk\n\n[ ] bread\n[ ] eggs", Checklist.toggleItem(content, 1, "bread"))
+        assertEquals("[ ] milk\n\n[x] bread\n[x] eggs", Checklist.toggleItem(content, 2, "eggs"))
+    }
+
+    @Test
+    fun toggleItemFollowsTextWhenTheListChanged() {
+        // The widget drew "eggs" at index 2, but an item was removed since.
+        val content = "[ ] milk\n[ ] eggs"
+        assertEquals("[ ] milk\n[x] eggs", Checklist.toggleItem(content, 2, "eggs"))
+        assertEquals(content, Checklist.toggleItem(content, 0, "gone"))
+    }
+
+    @Test
+    fun uncheckAllUnticksEverything() {
+        assertEquals("[ ] a\n[ ] b\n[ ] c", Checklist.uncheckAll("[x] a\n[ ] b\n[X] c"))
+    }
 }

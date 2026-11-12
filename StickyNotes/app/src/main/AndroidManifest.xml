@@ -39,6 +39,31 @@
             </intent-filter>
         </activity>
 
+        <!-- Picks the note for a "Sticky note" widget. Exported so the launcher can open it;
+             it checks the widget id belongs to this app and sits behind the app lock. -->
+        <activity
+            android:name=".widget.NotePickerActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- "Sticky note" widget: one chosen note, tickable checklist. -->
+        <receiver
+            android:name=".widget.NoteWidgetReceiver"
+            android:exported="true"
+            android:label="@string/note_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/note_widget_info" />
+        </receiver>
+
         <!-- Home-screen widget. Must be exported so the launcher can bind it; it only
              redraws the widget and never shows note text while the app lock is on. -->
         <receiver

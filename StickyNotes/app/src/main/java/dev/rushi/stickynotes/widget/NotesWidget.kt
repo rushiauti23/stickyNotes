@@ -37,13 +37,14 @@ import dev.rushi.stickynotes.data.plainBody
 
 /**
  * Home-screen widget: pinned notes (or the most recent ones). When the app lock is on it
- * shows no note content at all, only "Notes are locked".
+ * shows only "Notes are locked", unless the user chose "Show notes on widget" in Settings.
+ * Tapping a note still opens the app behind the lock.
  */
 class NotesWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val app = context.applicationContext as StickyNotesApp
-        val locked = app.appLock.enabled.value
+        val locked = app.appLock.enabled.value && !app.settings.widgetShowsNotes.value
         val notes = if (locked) emptyList() else app.repository.widgetNotes()
         val anyPinned = notes.any { it.pinned }
         provideContent { WidgetContent(context, notes, locked, anyPinned) }
@@ -88,7 +89,7 @@ private fun WidgetContent(context: Context, notes: List<Note>, locked: Boolean, 
         }
         Spacer(GlanceModifier.height(6.dp))
         when {
-            locked -> Hint(context, "Notes are locked")
+            locked -> Hint(context, "Notes are locked. Tap to open, or allow the widget in Settings.")
             notes.isEmpty() -> Hint(context, "No notes yet. Tap + to write one.")
             else -> LazyColumn {
                 items(notes, itemId = { it.id }) { note -> NoteRow(context, note) }

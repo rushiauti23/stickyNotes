@@ -10,6 +10,7 @@ import dev.rushi.stickynotes.settings.AppSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import androidx.glance.appwidget.updateAll
+import dev.rushi.stickynotes.widget.NoteWidget
 import dev.rushi.stickynotes.widget.NotesWidget
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
@@ -43,9 +44,12 @@ class StickyNotesApp : Application() {
         }
         // Keep the home-screen widget in step with notes and the app lock.
         appScope.launch {
-            combine(repository.notes, appLock.enabled) { _, _ -> }
+            combine(repository.notes, appLock.enabled, settings.widgetShowsNotes) { _, _, _ -> }
                 .debounce(WIDGET_REFRESH_DEBOUNCE_MS)
-                .collect { runCatching { NotesWidget().updateAll(this@StickyNotesApp) } }
+                .collect {
+                    runCatching { NotesWidget().updateAll(this@StickyNotesApp) }
+                    runCatching { NoteWidget().updateAll(this@StickyNotesApp) }
+                }
         }
     }
 

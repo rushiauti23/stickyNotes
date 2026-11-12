@@ -76,6 +76,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     val settings = app.settings
     val defaultColor by settings.defaultColorIndex.collectAsStateWithLifecycle()
     val relockAfter by settings.relockAfterMs.collectAsStateWithLifecycle()
+    val widgetShowsNotes by settings.widgetShowsNotes.collectAsStateWithLifecycle()
     var showRelockSheet by remember { mutableStateOf(false) }
     var reminderMessage by remember { mutableStateOf<String?>(null) }
 
@@ -195,7 +196,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     Spacer(Modifier.height(2.dp))
                     Text(
                         "Ask for fingerprint, face or screen lock when opening the app. " +
-                            "Also hides notes from screenshots, recent apps, the widget and notifications.",
+                            "Also hides notes from screenshots, recent apps and notifications.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -222,6 +223,48 @@ fun SettingsScreen(onBack: () -> Unit) {
                 enabled = enabled,
                 onClick = { showRelockSheet = true },
             )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = widgetShowsNotes,
+                        enabled = enabled,
+                        role = Role.Switch,
+                        onValueChange = settings::setWidgetShowsNotes,
+                    )
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Show notes on widget",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        if (enabled) {
+                            "Lets the Pinned notes widget show notes while the app is locked. " +
+                                "Anyone using your unlocked phone can read them there. " +
+                                "Sticky note widgets always show the note you picked."
+                        } else {
+                            "The widget always shows notes while app lock is off"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                Switch(
+                    checked = enabled && widgetShowsNotes,
+                    onCheckedChange = null,
+                    enabled = enabled,
+                    colors = SwitchDefaults.colors(
+                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+                )
+            }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             SectionTitle("Notes")

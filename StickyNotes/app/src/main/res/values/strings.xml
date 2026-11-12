@@ -2,4 +2,6 @@
     <string name="app_name">Sticky Notes</string>
     <string name="widget_name">Pinned notes</string>
     <string name="widget_description">Your pinned notes, one tap away</string>
+    <string name="note_widget_name">Sticky note</string>
+    <string name="note_widget_description">One note or to-do list on your home screen. Tick items right there.</string>
 </resources>

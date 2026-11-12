@@ -23,6 +23,15 @@ class AppSettings(context: Context) {
     /** How long the app may be in the background before the app lock asks again. */
     val relockAfterMs: StateFlow<Long> = _relockAfterMs.asStateFlow()
 
+    private val _widgetShowsNotes = MutableStateFlow(prefs.getBoolean(KEY_WIDGET_SHOWS_NOTES, false))
+    /** With the app lock on, whether the home-screen widget may still show note titles and text. */
+    val widgetShowsNotes: StateFlow<Boolean> = _widgetShowsNotes.asStateFlow()
+
+    fun setWidgetShowsNotes(show: Boolean) {
+        prefs.edit().putBoolean(KEY_WIDGET_SHOWS_NOTES, show).apply()
+        _widgetShowsNotes.value = show
+    }
+
     fun setDefaultColorIndex(index: Int) {
         val value = index.coerceIn(0, Note.COLOR_COUNT - 1)
         prefs.edit().putInt(KEY_DEFAULT_COLOR, value).apply()
@@ -40,6 +49,7 @@ class AppSettings(context: Context) {
         private const val PREFS = "settings"
         private const val KEY_DEFAULT_COLOR = "default_color_index"
         private const val KEY_RELOCK_AFTER = "relock_after_ms"
+        private const val KEY_WIDGET_SHOWS_NOTES = "widget_shows_notes"
 
         const val DEFAULT_RELOCK_MS = 30_000L
 
