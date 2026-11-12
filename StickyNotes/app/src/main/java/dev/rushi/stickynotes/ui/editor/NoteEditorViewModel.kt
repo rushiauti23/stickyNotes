@@ -170,7 +170,11 @@ class NoteEditorViewModel(
         if (loaded) pinned = !pinned
     }
 
-    fun setReminder(at: Long?) { reminderAt = at }
+    fun setReminder(at: Long?) {
+        // Never arm a reminder in the past: Android would fire it immediately.
+        if (at != null && at <= System.currentTimeMillis()) return
+        reminderAt = at
+    }
     fun setExpiry(at: Long?) { expiresAt = at }
 
     /** Inserts e.g. "12 Nov 2026, 00:14" at the cursor (replacing any selection). */
