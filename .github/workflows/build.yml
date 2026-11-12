@@ -34,6 +34,12 @@ jobs:
         with:
           gradle-version: "8.14.3"
 
+      - name: Unit tests
+        run: gradle :app:testDebugUnitTest
+
+      - name: Lint (Android code checks)
+        run: gradle :app:lintDebug
+
       - name: Build debug APK
         run: gradle :app:assembleDebug
 
@@ -57,6 +63,24 @@ jobs:
           } > keystore.properties
           gradle :app:bundleRelease
           rm -f release.jks keystore.properties
+
+      # Test and lint reports: uploaded even when a step fails, so the failure can be read.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: reports
+          path: |
+            StickyNotes/app/build/reports/tests/
+            StickyNotes/app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+
+      # Room database schemas: commit these into StickyNotes/app/schemas/ so future
+      # database upgrades can be checked against them.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: room-schemas
+          path: StickyNotes/app/schemas/
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
