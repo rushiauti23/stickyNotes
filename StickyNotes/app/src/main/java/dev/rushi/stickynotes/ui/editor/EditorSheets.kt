@@ -139,8 +139,10 @@ fun DateTimePickerDialog(onPicked: (Long) -> Unit, onDismiss: () -> Unit) {
             override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis >= todayUtc
         },
     )
+    // Start one hour ahead, so on a 12-hour clock AM/PM is already the sensible one.
+    val nextHour = remember { LocalTime.now().plusHours(1).hour }
     val timeState = rememberTimePickerState(
-        initialHour = 9,
+        initialHour = nextHour,
         initialMinute = 0,
         is24Hour = DateFormat.is24HourFormat(context),
     )
@@ -158,23 +160,35 @@ fun DateTimePickerDialog(onPicked: (Long) -> Unit, onDismiss: () -> Unit) {
             DatePicker(state = dateState)
         }
     } else {
+        // The date picker reports UTC midnight of the chosen day.
+        val date = Instant.ofEpochMilli(dateState.selectedDateMillis ?: todayUtc)
+            .atZone(ZoneOffset.UTC)
+            .toLocalDate()
+        val at = date.atTime(timeState.hour, timeState.minute)
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+        // A time that has already passed would make Android fire the reminder at once.
+        val inPast = at <= System.currentTimeMillis()
         AlertDialog(
             onDismissRequest = onDismiss,
             confirmButton = {
-                TextButton(onClick = {
-                    // The date picker reports UTC midnight of the chosen day.
-                    val date = Instant.ofEpochMilli(dateState.selectedDateMillis ?: todayUtc)
-                        .atZone(ZoneOffset.UTC)
-                        .toLocalDate()
-                    val at = date.atTime(timeState.hour, timeState.minute)
-                        .atZone(ZoneId.systemDefault())
-                        .toInstant()
-                        .toEpochMilli()
-                    onPicked(at)
-                }) { Text("Set reminder") }
+                TextButton(onClick = { onPicked(at) }, enabled = !inPast) { Text("Set reminder") }
             },
             dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-            text = { TimePicker(state = timeState) },
+            text = {
+                Column {
+                    TimePicker(state = timeState)
+                    if (inPast) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "That time has already passed today. Check AM/PM or pick a later time.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
         )
     }
 }
