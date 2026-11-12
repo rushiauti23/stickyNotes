@@ -89,9 +89,11 @@ private fun Note.isShowable() = !isTrashed && !isExpired()
 private val NoteInk = ColorProvider(day = Color(0xFF1C1B19), night = Color(0xFFE8E6E1))
 private val NoteMuted = ColorProvider(day = Color(0xFF6B6A66), night = Color(0xFFA3A19B))
 
-private fun paper(index: Int): ColorProvider {
-    val i = index.coerceIn(0, NoteColors.count - 1)
-    return ColorProvider(day = NoteColors.light[i], night = NoteColors.dark[i])
+// The day/night ColorProvider(...) imported above is a factory function; its return type
+// lives in another package, so let the compiler infer it.
+private fun paper(index: Int) = NoteColors.count.let { count ->
+    val i = index.coerceIn(0, count - 1)
+    ColorProvider(day = NoteColors.light[i], night = NoteColors.dark[i])
 }
 
 @Composable
