@@ -18,6 +18,9 @@ import dev.rushi.stickynotes.data.Checklist
 import dev.rushi.stickynotes.data.ChecklistItem
 import dev.rushi.stickynotes.data.Note
 import dev.rushi.stickynotes.data.NoteRepository
+import dev.rushi.stickynotes.data.text.Edit
+import dev.rushi.stickynotes.data.text.Markup
+import dev.rushi.stickynotes.data.text.TextFormat
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -28,6 +31,7 @@ import java.time.format.FormatStyle
 class NoteEditorViewModel(
     private val repo: NoteRepository,
     initialId: Long,
+    defaultColorIndex: Int = 0,
 ) : ViewModel() {
 
     val isNew = initialId == NEW_NOTE_ID
@@ -41,7 +45,7 @@ class NoteEditorViewModel(
     val items = mutableStateListOf<ChecklistItem>()
     var isChecklist by mutableStateOf(false)
         private set
-    var colorIndex by mutableIntStateOf(0) // 0 = "Plain"
+    var colorIndex by mutableIntStateOf(defaultColorIndex) // from Settings → New note colour
         private set
     var pinned by mutableStateOf(false)
         private set
@@ -51,6 +55,8 @@ class NoteEditorViewModel(
         private set
     var editedAt by mutableStateOf<Long?>(null)
         private set
+    var archived by mutableStateOf(false)
+        private set
     var loaded by mutableStateOf(isNew)
         private set
 
@@ -58,6 +64,7 @@ class NoteEditorViewModel(
     private var createdAt = System.currentTimeMillis()
     private var lastSaved: Note? = null
     private var deleted = false
+    private var deletedAt: Long? = null
     private val mutex = Mutex()
 
     init {
@@ -76,6 +83,8 @@ class NoteEditorViewModel(
                     pinned = n.pinned
                     reminderAt = n.reminderAt
                     expiresAt = n.expiresAt
+                    archived = n.archived
+                    deletedAt = n.deletedAt
                     createdAt = n.createdAt
                     editedAt = n.updatedAt
                     lastSaved = n
@@ -88,7 +97,73 @@ class NoteEditorViewModel(
     // --- Edits -------------------------------------------------------------------------------
 
     fun updateTitle(value: String) { title = value }
-    fun updateBody(value: TextFieldValue) { body = value }
+    /** Typing in the body. Records undo history and continues lists when Enter is pressed. */
+    fun updateBody(value: TextFieldValue) {
+        if (value.text == body.text) {
+            body = value // selection/composition change only
+            return
+        }
+        recordHistory(force = false)
+        val continued = TextFormat.continueList(body.text, value.toEdit())
+        body = continued?.toTextFieldValue() ?: value
+    }
+
+    // --- Formatting & undo -------------------------------------------------------------------
+
+    private val undoStack = ArrayDeque<TextFieldValue>()
+    private val redoStack = ArrayDeque<TextFieldValue>()
+    private var lastHistoryAt = 0L
+    var canUndo by mutableStateOf(false)
+        private set
+    var canRedo by mutableStateOf(false)
+        private set
+
+    /** Typing is grouped into ~1 s chunks; formatting actions are always their own undo step. */
+    private fun recordHistory(force: Boolean) {
+        val now = System.currentTimeMillis()
+        if (force || now - lastHistoryAt > HISTORY_GROUP_MS || undoStack.isEmpty()) {
+            undoStack.addLast(body)
+            if (undoStack.size > MAX_HISTORY) undoStack.removeFirst()
+            redoStack.clear()
+        }
+        lastHistoryAt = now
+        canUndo = undoStack.isNotEmpty()
+        canRedo = false
+    }
+
+    fun undo() {
+        val previous = undoStack.removeLastOrNull() ?: return
+        redoStack.addLast(body)
+        body = previous
+        lastHistoryAt = 0
+        canUndo = undoStack.isNotEmpty()
+        canRedo = true
+    }
+
+    fun redo() {
+        val next = redoStack.removeLastOrNull() ?: return
+        undoStack.addLast(body)
+        body = next
+        lastHistoryAt = 0
+        canUndo = true
+        canRedo = redoStack.isNotEmpty()
+    }
+
+    private fun applyEdit(change: (Edit) -> Edit) {
+        if (isChecklist) return
+        val result = change(body.toEdit())
+        if (result.text == body.text && result.start == body.selection.start && result.end == body.selection.end) return
+        recordHistory(force = true)
+        body = result.toTextFieldValue()
+        lastHistoryAt = 0
+    }
+
+    fun toggleInline(kind: Markup.InlineKind) = applyEdit { TextFormat.toggleInline(it, kind) }
+    fun toggleLine(kind: Markup.LineKind) = applyEdit { TextFormat.toggleLine(it, kind) }
+    fun clearFormatting() = applyEdit { TextFormat.clearFormatting(it) }
+
+    private fun TextFieldValue.toEdit() = Edit(text, selection.start, selection.end)
+    private fun Edit.toTextFieldValue() = TextFieldValue(text, TextRange(start, end))
     fun updateColor(index: Int) { colorIndex = index }
 
     fun togglePin() {
@@ -100,22 +175,24 @@ class NoteEditorViewModel(
 
     /** Inserts e.g. "12 Nov 2026, 00:14" at the cursor (replacing any selection). */
     fun insertTimestamp() {
-        if (isChecklist) return
         val stamp = LocalDateTime.now().format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT))
-        val sel = body.selection
-        val text = body.text.replaceRange(sel.min, sel.max, stamp)
-        body = TextFieldValue(text, TextRange(sel.min + stamp.length))
+        applyEdit { e -> Edit(e.text.replaceRange(e.min, e.max, stamp), e.min + stamp.length) }
     }
 
     fun toggleChecklist() {
         if (!loaded) return
+        undoStack.clear()
+        redoStack.clear()
+        canUndo = false
+        canRedo = false
         if (isChecklist) {
             body = TextFieldValue(Checklist.toPlainText(items))
             items.clear()
             isChecklist = false
         } else {
             items.clear()
-            items.addAll(Checklist.fromPlainText(body.text))
+            // "- milk" / "1. eggs" / "**bread**" become plain items "milk", "eggs", "bread".
+            items.addAll(Checklist.fromPlainText(Markup.removeAll(body.text)))
             if (items.isEmpty()) items.add(Checklist.newItem())
             body = TextFieldValue("")
             isChecklist = true
@@ -168,6 +245,8 @@ class NoteEditorViewModel(
         isChecklist = isChecklist,
         reminderAt = reminderAt,
         expiresAt = expiresAt,
+        archived = archived,
+        deletedAt = deletedAt,
     )
 
     // --- Persistence -------------------------------------------------------------------------
@@ -222,15 +301,32 @@ class NoteEditorViewModel(
         }
     }
 
+    /** Archives (or un-archives) the note and leaves the editor. The board offers Undo. */
+    fun toggleArchive(onDone: () -> Unit) {
+        if (!loaded) return
+        viewModelScope.launch {
+            save()
+            mutex.withLock {
+                if (noteId != 0L) {
+                    deleted = true // the repository owns the note from here; skip further saves
+                    repo.setArchived(snapshot().copy(updatedAt = lastSaved?.updatedAt ?: System.currentTimeMillis()), !archived)
+                }
+            }
+            onDone()
+        }
+    }
+
     companion object {
         const val NEW_NOTE_ID = -1L
         const val ARG_NOTE_ID = "noteId"
+        private const val HISTORY_GROUP_MS = 1_000L
+        private const val MAX_HISTORY = 100
 
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as StickyNotesApp
                 val id = createSavedStateHandle().get<Long>(ARG_NOTE_ID) ?: NEW_NOTE_ID
-                NoteEditorViewModel(app.repository, id)
+                NoteEditorViewModel(app.repository, id, app.settings.defaultColorIndex.value)
             }
         }
     }

@@ -1,6 +1,6 @@
 # Privacy Policy — Sticky Notes
 
-_Last updated: 11 November 2026 (v1.2.0)_
+_Last updated: 11 November 2026 (v1.4.0)_
 
 Sticky Notes does not collect, transmit, sell or share any personal data.
 
@@ -13,6 +13,8 @@ Sticky Notes does not collect, transmit, sell or share any personal data.
   Android. The app never sees or stores your biometric data.
 - **Sharing:** notes leave the app only when you tap Share and pick another app yourself.
 - **Reminders:** scheduled on your phone with Android's alarm service. Nothing leaves the device.
-- **Deleting data:** uninstalling the app or clearing its storage removes all notes.
+- **Export:** creates a backup file only where you choose to save it. The file is not encrypted.
+- **Widget:** shows note titles on your home screen, unless the app lock is on.
+- **Deleting data:** deleted notes stay in Trash for 30 days, then are erased. Uninstalling the app or clearing its storage removes all notes.
 
 Questions: contact the developer through the email listed on the app's Google Play page.

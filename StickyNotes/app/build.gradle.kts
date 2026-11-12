@@ -24,8 +24,8 @@ android {
         applicationId = "dev.rushi.stickynotes"
         minSdk = 28
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 5
+        versionName = "1.4.0"
     }
 
     signingConfigs {
@@ -63,6 +63,19 @@ android {
     buildFeatures {
         compose = true
     }
+
+    lint {
+        // Real problems fail the build; style/version nags stay warnings.
+        abortOnError = true
+        warningsAsErrors = false
+        checkDependencies = false
+        disable += setOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion", "OldTargetApi")
+        htmlReport = true
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 kotlin {
@@ -91,9 +104,14 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.9.0")
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.fragment:fragment-ktx:1.8.6") // biometric pulls an old fragment; pin a current one
+    implementation("androidx.glance:glance-appwidget:1.1.1")
 
     val room = "2.7.2"
     implementation("androidx.room:room-runtime:$room")
     implementation("androidx.room:room-ktx:$room")
     ksp("androidx.room:room-compiler:$room")
+
+    // JVM unit tests. Android's built-in org.json is a stub off-device, so tests use the real one.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

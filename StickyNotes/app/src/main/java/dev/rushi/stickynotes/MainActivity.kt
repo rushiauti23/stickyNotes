@@ -14,21 +14,27 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import dev.rushi.stickynotes.data.BackupCodec
+import dev.rushi.stickynotes.data.Note
 import dev.rushi.stickynotes.security.AppLock
 import dev.rushi.stickynotes.security.Authenticator
+import dev.rushi.stickynotes.ui.collections.CollectionMode
+import dev.rushi.stickynotes.ui.collections.CollectionScreen
 import dev.rushi.stickynotes.ui.editor.NoteEditorScreen
 import dev.rushi.stickynotes.ui.editor.NoteEditorViewModel
 import dev.rushi.stickynotes.ui.list.NoteListScreen
 import dev.rushi.stickynotes.ui.lock.LockScreen
 import dev.rushi.stickynotes.ui.settings.SettingsScreen
 import dev.rushi.stickynotes.ui.theme.StickyNotesTheme
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 val LocalAuthenticator = staticCompositionLocalOf<Authenticator> { error("No Authenticator") }
 val LocalAppLock = staticCompositionLocalOf<AppLock> { error("No AppLock") }
@@ -36,18 +42,22 @@ val LocalAppLock = staticCompositionLocalOf<AppLock> { error("No AppLock") }
 // FragmentActivity (a ComponentActivity) is required by BiometricPrompt.
 class MainActivity : FragmentActivity() {
 
-    private val appLock by lazy { (application as StickyNotesApp).appLock }
+    private val app by lazy { application as StickyNotesApp }
+    private val appLock by lazy { app.appLock }
     private lateinit var authenticator: Authenticator
 
-    /** Note to open, e.g. from a reminder notification. Consumed once the notes UI shows it. */
+    /**
+     * Note to open: an id, or [NoteEditorViewModel.NEW_NOTE_ID] for a new note. Set by
+     * notifications, the widget and "Share to Sticky Notes"; consumed by the notes UI.
+     */
     private val openNoteRequest = MutableStateFlow<Long?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        authenticator = Authenticator(this)
+        authenticator = Authenticator(this, beforePrompt = appLock::expectExternalActivity)
         applySecureFlag(appLock.enabled.value)
-        if (savedInstanceState == null) handleOpenNoteIntent(intent)
+        if (savedInstanceState == null) handleIntent(intent)
 
         setContent {
             StickyNotesTheme {
@@ -83,15 +93,39 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleOpenNoteIntent(intent)
+        handleIntent(intent)
     }
 
-    // The activity is exported (launcher), so treat the extra as untrusted: it can only ever
-    // select one of the user's own notes by id, and the app lock still applies on top.
-    private fun handleOpenNoteIntent(intent: Intent?) {
-        val id = intent?.getLongExtra(EXTRA_OPEN_NOTE_ID, -1L) ?: -1L
-        intent?.removeExtra(EXTRA_OPEN_NOTE_ID)
-        if (id > 0L) openNoteRequest.value = id
+    /**
+     * The activity is exported (launcher + share target), so every extra here is untrusted.
+     * An id can only select one of the user's own notes; shared text is length-capped and
+     * stored as plain text. The app lock still applies before anything is shown.
+     */
+    private fun handleIntent(intent: Intent?) {
+        intent ?: return
+        when {
+            intent.action == Intent.ACTION_SEND && intent.type?.startsWith("text/") == true -> {
+                val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
+                    .take(BackupCodec.MAX_CONTENT)
+                val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty()
+                    .take(BackupCodec.MAX_TITLE)
+                intent.removeExtra(Intent.EXTRA_TEXT)
+                if (text.isBlank() && subject.isBlank()) return
+                lifecycleScope.launch {
+                    val id = app.repository.insert(Note(title = subject, content = text))
+                    openNoteRequest.value = id
+                }
+            }
+            intent.getBooleanExtra(EXTRA_NEW_NOTE, false) -> {
+                intent.removeExtra(EXTRA_NEW_NOTE)
+                openNoteRequest.value = NoteEditorViewModel.NEW_NOTE_ID
+            }
+            else -> {
+                val id = intent.getLongExtra(EXTRA_OPEN_NOTE_ID, -1L)
+                intent.removeExtra(EXTRA_OPEN_NOTE_ID)
+                if (id > 0L) openNoteRequest.value = id
+            }
+        }
     }
 
     override fun onStart() {
@@ -101,7 +135,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onStop() {
         super.onStop()
-        appLock.onAppBackgrounded()
+        // A rotation or theme change restarts the activity; that isn't "leaving the app".
+        if (!isChangingConfigurations) appLock.onAppBackgrounded()
     }
 
     private fun applySecureFlag(secure: Boolean) {
@@ -114,16 +149,20 @@ class MainActivity : FragmentActivity() {
 
     companion object {
         const val EXTRA_OPEN_NOTE_ID = "open_note_id"
+        const val EXTRA_NEW_NOTE = "new_note"
     }
 }
 
 @Composable
 private fun AppNavHost(openNoteRequest: StateFlow<Long?>, onOpenNoteHandled: () -> Unit) {
     val nav = rememberNavController()
+    val openNote: (Long) -> Unit = { id -> nav.navigate("note/$id") }
     NavHost(navController = nav, startDestination = "notes") {
         composable("notes") {
             NoteListScreen(
-                onOpenNote = { id -> nav.navigate("note/$id") },
+                onOpenNote = openNote,
+                onOpenArchive = { nav.navigate("archive") },
+                onOpenTrash = { nav.navigate("trash") },
                 onOpenSettings = { nav.navigate("settings") },
             )
         }
@@ -133,6 +172,12 @@ private fun AppNavHost(openNoteRequest: StateFlow<Long?>, onOpenNoteHandled: () 
         ) {
             // navigateUp() is a no-op on the start screen, so a double tap can't blank the app.
             NoteEditorScreen(onBack = { nav.navigateUp() })
+        }
+        composable("archive") {
+            CollectionScreen(mode = CollectionMode.Archive, onBack = { nav.navigateUp() }, onOpenNote = openNote)
+        }
+        composable("trash") {
+            CollectionScreen(mode = CollectionMode.Trash, onBack = { nav.navigateUp() }, onOpenNote = openNote)
         }
         composable("settings") {
             SettingsScreen(onBack = { nav.navigateUp() })

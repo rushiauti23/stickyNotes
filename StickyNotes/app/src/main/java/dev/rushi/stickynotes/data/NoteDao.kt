@@ -22,6 +22,21 @@ interface NoteDao {
     @Query("DELETE FROM notes WHERE expiresAt IS NOT NULL AND expiresAt <= :now")
     suspend fun deleteExpired(now: Long): Int
 
+    @Query("SELECT * FROM notes ORDER BY pinned DESC, updatedAt DESC")
+    suspend fun getAll(): List<Note>
+
+    @Query("DELETE FROM notes WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    suspend fun deleteTrashedBefore(cutoff: Long): Int
+
+    @Query("SELECT id FROM notes WHERE deletedAt IS NOT NULL")
+    suspend fun trashedIds(): List<Long>
+
+    @Query("DELETE FROM notes WHERE deletedAt IS NOT NULL")
+    suspend fun deleteAllTrashed(): Int
+
+    @Insert
+    suspend fun insertAll(notes: List<Note>): List<Long>
+
     /** REPLACE so an undone delete can re-insert the note with its original id. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(note: Note): Long

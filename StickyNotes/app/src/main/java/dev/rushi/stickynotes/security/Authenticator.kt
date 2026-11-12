@@ -13,7 +13,11 @@ import androidx.fragment.app.FragmentActivity
  * Allows fingerprint/face OR the phone's PIN/pattern/password, so a user whose biometrics
  * fail is never locked out of their own notes.
  */
-class Authenticator(activity: FragmentActivity) {
+class Authenticator(
+    activity: FragmentActivity,
+    /** Called just before the prompt shows; on some Android versions it's a separate screen. */
+    private val beforePrompt: () -> Unit = {},
+) {
 
     private var onSuccess: (() -> Unit)? = null
 
@@ -44,6 +48,7 @@ class Authenticator(activity: FragmentActivity) {
             .setAllowedAuthenticators(BIOMETRIC_WEAK or DEVICE_CREDENTIAL)
             .setConfirmationRequired(false)
             .build()
+        beforePrompt()
         prompt.authenticate(info)
     }
 }

@@ -34,6 +34,24 @@ object Notifications {
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
 
+    /** Sends a sample notification right now, to check that reminders can reach the user. */
+    @SuppressLint("MissingPermission") // checked by canNotify()
+    fun showTest(context: Context): Boolean {
+        if (!canNotify(context)) return false
+        val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
+            .setSmallIcon(R.drawable.ic_stat_note)
+            .setContentTitle("Reminders work")
+            .setContentText("This is how a note reminder will look.")
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+        NotificationManagerCompat.from(context).notify(TEST_NOTIFICATION_ID, notification)
+        return true
+    }
+
+    private const val TEST_NOTIFICATION_ID = Int.MAX_VALUE
+
     /**
      * @param hideContent true when the app lock is on: the notification then never shows note
      *   text, so the lock can't be sidestepped by reading notifications.

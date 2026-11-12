@@ -8,13 +8,25 @@ A minimal, private, offline notes app: Kotlin + Jetpack Compose (Material 3) + R
 - **Checklists**: turn any note into tickable items ("Next" on the keyboard adds the next item);
   the board shows progress like "3/5 done"
 - **Reminders**: in 1 hour, this evening, tomorrow morning, next week, or any date & time.
-  Tapping the notification opens the note. Survive reboots. With the app lock on, the
+  Tapping the notification opens the note. Re-armed after a restart and every time the app opens.
+  Settings → Reminders shows whether notifications, on-time alarms and battery settings are OK,
+  and can send a test notification. With the app lock on, the
   notification never shows note text
 - **Vanishing notes**: a note can delete itself after 24 hours, 3 days or 7 days. Handy for
   parking spots, one-time codes, today's to-dos
 - **#tags**: write `#work` or `#ideas` anywhere in a note and filter chips appear on the board
 - **Timestamp**: one tap inserts the current date & time at the cursor
+- **Text formatting** (Aa button): bold, italic, underline, strikethrough, highlight, code,
+  headings, bulleted & numbered lists (Enter continues the list), quotes, clear formatting,
+  undo / redo. Stored as light Markdown (`**bold**`, `- item`, `1. item`), so it survives
+  backup and sharing; cards show it nicely, the editor shows the markers faintly
+- **Default colour** for new notes (Settings → Notes)
 - Word count and "edited" time under every note
+- **Archive**: hide notes you want to keep but not see every day (long-press → Archive, or ⋮ → Archive)
+- **Trash**: deleted notes stay recoverable for 30 days; Undo on every delete/archive
+- **Backup**: Settings → Export / Import a `.json` file (export asks for your fingerprint if the app lock is on)
+- **Home-screen widget**: pinned notes (or recent ones) with a + button; shows nothing while the app lock is on
+- **Share to Sticky Notes**: share text from any app and it becomes a new note
 - Pin notes to the top, search title + body
 - Auto-save on back and when the app goes to the background; emptied notes are discarded
 - Long-press a note → Pin / Delete, with **Undo** snackbar
@@ -27,13 +39,23 @@ A minimal, private, offline notes app: Kotlin + Jetpack Compose (Material 3) + R
 
 ## App lock: what it protects
 The lock stops someone who picks up your unlocked phone from reading your notes. It re-locks
-after the app has been in the background for 30 seconds, and always on a fresh start.
+when you come back after the time chosen in Settings → Lock again (immediately, 30 s, 1/5/15 min
+or 1 h; leaving the app or turning off the screen both count), always on a fresh start, and on
+demand with ⋮ → Lock now.
 
 It is a *privacy* lock, not encryption: the notes database itself isn't encrypted with a key
 tied to your fingerprint. Someone with a rooted phone and hacking tools (e.g. Frida) could
 bypass the prompt or read the database directly. Encrypting the database (SQLCipher + an Android
 Keystore key unlocked by biometrics) would close that gap, but if you add a new fingerprint
 the key is destroyed and the notes become unreadable, so it needs a recovery plan first.
+
+## Checks on every build
+GitHub Actions runs, in order: unit tests (checklist format, #tags, backup import hardening),
+Android lint, then builds the APK. If a step fails, download the **reports** artifact to see why.
+
+**Database schemas:** the build uploads a **room-schemas** artifact. Unzip it and commit the
+`dev.rushi.stickynotes.data.NoteDatabase/` folder into `StickyNotes/app/schemas/` once, and again
+whenever the database version changes, so future upgrades can be checked against them.
 
 ## Project layout
 ```

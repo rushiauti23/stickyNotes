@@ -4,16 +4,21 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import dev.rushi.stickynotes.data.Note
 
 /**
- * Arms one alarm per note. Uses inexact, doze-friendly alarms, so no "exact alarm"
- * permission is needed; a reminder can arrive a few minutes late when the phone is idle.
+ * Arms one alarm per note. Uses an exact alarm when Android allows it (always on Android 9–11;
+ * on 12+ only if the user grants "Alarms & reminders"), otherwise an inexact doze-friendly
+ * alarm that can arrive a few minutes late.
  */
 class ReminderScheduler(context: Context) {
 
     private val appContext = context.applicationContext
     private val alarms = appContext.getSystemService(AlarmManager::class.java)
+
+    fun canScheduleExact(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarms?.canScheduleExactAlarms() == true
 
     fun sync(note: Note) {
         val at = note.reminderAt
@@ -21,7 +26,17 @@ class ReminderScheduler(context: Context) {
     }
 
     fun schedule(noteId: Long, at: Long) {
-        alarms?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pendingIntent(noteId))
+        val manager = alarms ?: return
+        val intent = pendingIntent(noteId)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
+            try {
+                manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, intent)
+                return
+            } catch (e: SecurityException) {
+                // Permission revoked between the check and the call: fall back to inexact.
+            }
+        }
+        manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, intent)
     }
 
     fun cancel(noteId: Long) {

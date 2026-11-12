@@ -1,6 +1,7 @@
 package dev.rushi.stickynotes.ui.editor
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -43,9 +44,24 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.FormatBold
+import androidx.compose.material.icons.filled.FormatClear
+import androidx.compose.material.icons.filled.FormatItalic
+import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.FormatUnderlined
+import androidx.compose.material.icons.filled.Highlight
+import androidx.compose.material.icons.filled.StrikethroughS
+import androidx.compose.material.icons.filled.Title
+import androidx.compose.material.icons.outlined.TextFormat
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
 import androidx.compose.material.icons.outlined.Delete
@@ -55,8 +71,10 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -98,6 +116,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.rushi.stickynotes.LocalAppLock
+import dev.rushi.stickynotes.MainActivity
+import dev.rushi.stickynotes.data.text.Markup
+import dev.rushi.stickynotes.ui.common.markupVisualTransformation
 import dev.rushi.stickynotes.data.ChecklistItem
 import dev.rushi.stickynotes.reminders.Notifications as ReminderNotifications
 import dev.rushi.stickynotes.ui.common.reminderLabel
@@ -124,6 +146,8 @@ fun NoteEditorScreen(
 
     var sheet by remember { mutableStateOf(Sheet.None) }
     var showColors by remember { mutableStateOf(false) }
+    var showFormat by remember { mutableStateOf(false) }
+    val appLock = LocalAppLock.current
 
     BackHandler(onBack = exit)
     // Saves if the user switches apps or the system kills the process mid-edit.
@@ -175,11 +199,20 @@ fun NoteEditorScreen(
                         )
                     }
                     IconButton(
-                        onClick = { shareNote(context, vm.title, vm.shareText()) },
+                        onClick = {
+                            appLock.expectExternalActivity()
+                            shareNote(context, vm.title, vm.shareText())
+                        },
                         enabled = vm.loaded,
                         colors = iconColors,
                     ) {
                         Icon(Icons.Outlined.Share, contentDescription = "Share")
+                    }
+                    IconButton(onClick = { vm.toggleArchive(onBack) }, enabled = vm.loaded, colors = iconColors) {
+                        Icon(
+                            if (vm.archived) Icons.Outlined.Unarchive else Icons.Outlined.Archive,
+                            contentDescription = if (vm.archived) "Unarchive" else "Archive",
+                        )
                     }
                     IconButton(onClick = { vm.delete(onBack) }, enabled = vm.loaded, colors = iconColors) {
                         Icon(Icons.Outlined.Delete, contentDescription = "Delete")
@@ -194,6 +227,13 @@ fun NoteEditorScreen(
                     .navigationBarsPadding()
                     .imePadding(),
             ) {
+                AnimatedVisibility(
+                    visible = showFormat && !vm.isChecklist,
+                    enter = fadeIn(tween(150)) + expandVertically(tween(180)),
+                    exit = fadeOut(tween(100)) + shrinkVertically(tween(140)),
+                ) {
+                    FormatBar(vm = vm, ink = ink)
+                }
                 AnimatedVisibility(
                     visible = showColors,
                     enter = fadeIn(tween(150)) + expandVertically(tween(180)),
@@ -222,6 +262,13 @@ fun NoteEditorScreen(
                     ToolButton(Icons.Outlined.HourglassEmpty, "Vanish", vm.expiresAt != null, ink, vm.loaded) {
                         sheet = Sheet.Vanish
                     }
+                    ToolButton(
+                        icon = Icons.Outlined.TextFormat,
+                        label = "Text formatting",
+                        active = showFormat && !vm.isChecklist,
+                        ink = ink,
+                        enabled = vm.loaded && !vm.isChecklist,
+                    ) { showFormat = !showFormat }
                     ToolButton(Icons.Outlined.Palette, "Colour", showColors, ink, vm.loaded) {
                         showColors = !showColors
                     }
@@ -324,7 +371,7 @@ private fun NoteEditorViewModel.shareText(): String =
     if (isChecklist) {
         items.filter { it.text.isNotBlank() }.joinToString("\n") { (if (it.checked) "☑ " else "☐ ") + it.text }
     } else {
-        body.text
+        Markup.strip(body.text)
     }
 
 // --- Text fields -----------------------------------------------------------------------------
@@ -359,6 +406,7 @@ private fun BodyField(
         cursorBrush = SolidColor(ink),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
         modifier = modifier,
+        visualTransformation = remember(ink) { markupVisualTransformation(ink) },
         decorationBox = { inner -> Placeholder(value.text.isEmpty(), "Note. Add #tags to group notes.", style, ink) { inner() } },
     )
 }
@@ -462,6 +510,46 @@ private fun ChecklistEditor(
     }
 }
 
+// --- Formatting bar --------------------------------------------------------------------------
+
+@Composable
+private fun FormatBar(vm: NoteEditorViewModel, ink: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 8.dp),
+    ) {
+        ToolButton(Icons.AutoMirrored.Filled.Undo, "Undo", false, ink, vm.canUndo, vm::undo)
+        ToolButton(Icons.AutoMirrored.Filled.Redo, "Redo", false, ink, vm.canRedo, vm::redo)
+        BarDivider(ink)
+        ToolButton(Icons.Filled.FormatBold, "Bold", false, ink) { vm.toggleInline(Markup.InlineKind.Bold) }
+        ToolButton(Icons.Filled.FormatItalic, "Italic", false, ink) { vm.toggleInline(Markup.InlineKind.Italic) }
+        ToolButton(Icons.Filled.FormatUnderlined, "Underline", false, ink) { vm.toggleInline(Markup.InlineKind.Underline) }
+        ToolButton(Icons.Filled.StrikethroughS, "Strikethrough", false, ink) { vm.toggleInline(Markup.InlineKind.Strike) }
+        ToolButton(Icons.Filled.Highlight, "Highlight", false, ink) { vm.toggleInline(Markup.InlineKind.Highlight) }
+        ToolButton(Icons.Filled.Code, "Code", false, ink) { vm.toggleInline(Markup.InlineKind.Code) }
+        BarDivider(ink)
+        ToolButton(Icons.Filled.Title, "Heading", false, ink) { vm.toggleLine(Markup.LineKind.Heading1) }
+        ToolButton(Icons.Filled.FormatListBulleted, "Bulleted list", false, ink) { vm.toggleLine(Markup.LineKind.Bullet) }
+        ToolButton(Icons.Filled.FormatListNumbered, "Numbered list", false, ink) { vm.toggleLine(Markup.LineKind.Numbered) }
+        ToolButton(Icons.Filled.FormatQuote, "Quote", false, ink) { vm.toggleLine(Markup.LineKind.Quote) }
+        BarDivider(ink)
+        ToolButton(Icons.Filled.FormatClear, "Clear formatting", false, ink, onClick = vm::clearFormatting)
+    }
+}
+
+@Composable
+private fun BarDivider(ink: Color) {
+    VerticalDivider(
+        color = ink.copy(alpha = 0.12f),
+        modifier = Modifier
+            .height(24.dp)
+            .padding(horizontal = 4.dp),
+    )
+}
+
 // --- Small pieces ----------------------------------------------------------------------------
 
 @Composable
@@ -522,7 +610,7 @@ private fun Footer(editedAt: Long?, words: Int, ink: Color) {
 
 /** Row of small colour dots. Each dot sits in a 44dp touch target. */
 @Composable
-private fun ColorPicker(selected: Int, onSelect: (Int) -> Unit, ink: Color) {
+internal fun ColorPicker(selected: Int, onSelect: (Int) -> Unit, ink: Color) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -564,5 +652,10 @@ private fun shareNote(context: Context, title: String, content: String) {
         putExtra(Intent.EXTRA_TEXT, text)
         if (title.isNotBlank()) putExtra(Intent.EXTRA_SUBJECT, title)
     }
-    context.startActivity(Intent.createChooser(send, null))
+    val chooser = Intent.createChooser(send, null).putExtra(
+        Intent.EXTRA_EXCLUDE_COMPONENTS,
+        // Don't offer "Sticky Notes" itself; sharing a note into the app would just duplicate it.
+        arrayOf(ComponentName(context, MainActivity::class.java)),
+    )
+    context.startActivity(chooser)
 }

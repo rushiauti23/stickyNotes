@@ -8,7 +8,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.rushi.stickynotes.StickyNotesApp
 import dev.rushi.stickynotes.data.Note
 import dev.rushi.stickynotes.data.NoteRepository
-import dev.rushi.stickynotes.data.isExpired
+import dev.rushi.stickynotes.data.UndoEvent
+import dev.rushi.stickynotes.data.isOnBoard
 import dev.rushi.stickynotes.data.searchableText
 import dev.rushi.stickynotes.data.tags
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,7 +29,7 @@ class NoteListViewModel(private val repo: NoteRepository) : ViewModel() {
     private val _selectedTag = MutableStateFlow<String?>(null)
     val selectedTag: StateFlow<String?> = _selectedTag.asStateFlow()
 
-    private val live = repo.notes.map { list -> list.filterNot { it.isExpired() } }
+    private val live = repo.notes.map { list -> list.filter { it.isOnBoard() } }
 
     /** Most-used #tags first, for the filter chips. */
     val tags: StateFlow<List<String>> = live.map { list ->
@@ -51,7 +52,7 @@ class NoteListViewModel(private val repo: NoteRepository) : ViewModel() {
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val pendingUndo: StateFlow<Note?> = repo.pendingUndo
+    val pendingUndo: StateFlow<UndoEvent?> = repo.pendingUndo
 
     fun onQueryChange(q: String) { _query.value = q }
 
@@ -61,7 +62,8 @@ class NoteListViewModel(private val repo: NoteRepository) : ViewModel() {
 
     fun togglePin(note: Note) = repo.togglePin(note)
     fun delete(note: Note) = repo.delete(note)
-    fun undoDelete() = repo.undoDelete()
+    fun archive(note: Note) = repo.setArchived(note, true)
+    fun undo() = repo.undo()
     fun clearUndo() = repo.clearUndo()
 
     /** Called whenever the board comes into view, so vanished notes are really gone. */
