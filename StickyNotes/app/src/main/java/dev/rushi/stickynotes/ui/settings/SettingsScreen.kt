@@ -72,6 +72,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as StickyNotesApp }
     val repository = app.repository
+    val appLock = LocalAppLock.current
     val settings = app.settings
     val defaultColor by settings.defaultColorIndex.collectAsStateWithLifecycle()
     val relockAfter by settings.relockAfterMs.collectAsStateWithLifecycle()
@@ -94,7 +95,6 @@ fun SettingsScreen(onBack: () -> Unit) {
         val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
         runCatching { context.startActivity(intent) }.onFailure { runCatching { context.startActivity(fallback) } }
     }
-    val appLock = LocalAppLock.current
     val authenticator = LocalAuthenticator.current
     val scope = rememberCoroutineScope()
     val enabled by appLock.enabled.collectAsStateWithLifecycle()
