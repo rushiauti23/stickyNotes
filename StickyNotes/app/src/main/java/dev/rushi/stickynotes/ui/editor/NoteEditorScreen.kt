@@ -50,7 +50,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatClear
 import androidx.compose.material.icons.filled.FormatItalic
-import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.FormatUnderlined
@@ -532,7 +532,7 @@ private fun FormatBar(vm: NoteEditorViewModel, ink: Color) {
         ToolButton(Icons.Filled.Code, "Code", false, ink) { vm.toggleInline(Markup.InlineKind.Code) }
         BarDivider(ink)
         ToolButton(Icons.Filled.Title, "Heading", false, ink) { vm.toggleLine(Markup.LineKind.Heading1) }
-        ToolButton(Icons.Filled.FormatListBulleted, "Bulleted list", false, ink) { vm.toggleLine(Markup.LineKind.Bullet) }
+        ToolButton(Icons.AutoMirrored.Filled.FormatListBulleted, "Bulleted list", false, ink) { vm.toggleLine(Markup.LineKind.Bullet) }
         ToolButton(Icons.Filled.FormatListNumbered, "Numbered list", false, ink) { vm.toggleLine(Markup.LineKind.Numbered) }
         ToolButton(Icons.Filled.FormatQuote, "Quote", false, ink) { vm.toggleLine(Markup.LineKind.Quote) }
         BarDivider(ink)
